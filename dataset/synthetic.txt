@@ -1,0 +1,9 @@
+checkerboard/LR/checker_004.png	checkerboard/HR/checker_004.png
+checkerboard/LR/checker_008.png	checkerboard/HR/checker_008.png
+checkerboard/LR/checker_012.png	checkerboard/HR/checker_012.png
+checkerboard/LR/checker_016.png	checkerboard/HR/checker_016.png
+checkerboard/LR/checker_032.png	checkerboard/HR/checker_032.png
+checkerboard/LR/checker_048.png	checkerboard/HR/checker_048.png
+checkerboard/LR/checker_072.png	checkerboard/HR/checker_072.png
+checkerboard/LR/checker_096.png	checkerboard/HR/checker_096.png
+checkerboard/LR/checker_144.png	checkerboard/HR/checker_144.png

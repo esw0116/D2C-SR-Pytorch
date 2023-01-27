@@ -1,0 +1,9 @@
+checkerboard_smth/LR/checker_004.png	checkerboard_smth/HR/checker_004.png
+checkerboard_smth/LR/checker_008.png	checkerboard_smth/HR/checker_008.png
+checkerboard_smth/LR/checker_012.png	checkerboard_smth/HR/checker_012.png
+checkerboard_smth/LR/checker_016.png	checkerboard_smth/HR/checker_016.png
+checkerboard_smth/LR/checker_032.png	checkerboard_smth/HR/checker_032.png
+checkerboard_smth/LR/checker_048.png	checkerboard_smth/HR/checker_048.png
+checkerboard_smth/LR/checker_072.png	checkerboard_smth/HR/checker_072.png
+checkerboard_smth/LR/checker_096.png	checkerboard_smth/HR/checker_096.png
+checkerboard_smth/LR/checker_144.png	checkerboard_smth/HR/checker_144.png
