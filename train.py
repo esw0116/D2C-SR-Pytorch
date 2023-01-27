@@ -133,8 +133,9 @@ def worker(args):
         with torch.no_grad():
             out11, out12, out21, out22 = model_D(image)
             sr = model_C(out11, out12, out21, out22)
+        sr = sr.cpu(); label = label.cpu()
         _, ssim_it = eval_metrics(sr, label)
-        psnr_it = cal_psnr(sr, label)
+        psnr_it = cal_psnr(sr, label, args.scale)
         # psnr_it = cal_psnr(sr, label, args.scale)
         # ssim_it = ssim(sr, label)
         # if world_size > 1:
