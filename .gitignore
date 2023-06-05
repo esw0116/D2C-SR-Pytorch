@@ -193,3 +193,5 @@ poetry.toml
 
 experiments
 dataset/*.txt
+results
+train_backups

@@ -3,7 +3,7 @@ import argparse
 import os
 
 lr_init = 0.0001
-epoch = 20000
+epoch = 4000 #20000
 decay_epoch = 2000
 lr_decay_rate = 0.5
 batch_size = 4
@@ -24,7 +24,7 @@ parser.add_argument('--load_checkpoint', type=bool, default=False,
                     help='if load checkpoint or not')
 parser.add_argument("--ex_id", type=str, default=ex_id,
                     help="exp id")
-parser.add_argument("--print-freq", type=int, default=200,
+parser.add_argument("--print-freq", type=int, default=500,
                     help="print freq")
 parser.add_argument("--val-freq", type=int, default=50,
                     help="print freq")

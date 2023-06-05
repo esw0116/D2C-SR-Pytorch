@@ -17,7 +17,7 @@ def triplet_loss(anchor, positive, negative, margin=1e-5):
 
     # Compute triplet loss
     basic_loss = pos_dist - neg_dist + margin
-    trip_loss = torch.maximum(basic_loss, torch.Tensor([0.]))
+    trip_loss = torch.maximum(basic_loss, torch.zeros_like(basic_loss))
 
     return trip_loss
 

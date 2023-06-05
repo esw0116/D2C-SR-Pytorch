@@ -80,4 +80,25 @@ class BasicConv(nn.Module):
             x = self.relu(x)
         return x
 
+class _baseq(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, steps):
+        y_step_ind=torch.floor(x / steps)
+        y = y_step_ind * steps
+        return y
 
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output, None
+
+class BASEQ(nn.Module):
+    def __init__(self, lvls, activation_range):
+        super(BASEQ, self).__init__()
+        self.lvls = lvls
+        self.activation_range = activation_range
+        self.steps = 2 * activation_range / self.lvls
+
+    def forward(self, x):
+        x=(((-x - self.activation_range).abs() - (x - self.activation_range).abs()))/2.0
+        x[x > self.activation_range-0.1*self.steps] =self.activation_range-0.1*self.steps
+        return _baseq.apply(x, self.steps)
