@@ -13,19 +13,18 @@ import os, sys
 sys.path.append(os.path.abspath('.'))
 import time
 import logging
-import numpy as np
-from model.simple2_model import D_Net, C_Net
+
 import torch
 import torch.utils.data as data
-import torch.distributed as dist
 import torch.optim as optim
 from torch.nn import functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 from dataset.dataset import *
 from metrics.PSNR import cal_psnr
-# from metrics.SSIM import *
 from loss.divergence import trip_loss
 from utils import eval_metrics
+from model.small_model import D_Net, C_Net
 
 from config.config import args
 import warnings
@@ -33,25 +32,16 @@ import warnings
 logger = logging.getLogger()
 warnings.filterwarnings("ignore")
 
+
 def main():
-    ngpus_per_node = 1
-    if args.ngpus:
-        ngpus_per_node = args.ngpus
     save_dir = "./experiments/"
     args.ex_name = "%s_x%s" % (args.ex_id, args.scale)
     args.save = os.path.join(save_dir, args.ex_name)
-    # launch processes
-    # train = dist.launcher(worker) if ngpus_per_node > 1 else worker
-    # train(args)
-    worker(args)
+    writer = SummaryWriter(log_dir=args.save)
 
-
-def worker(args):
     diver_w = 0.
-    # rank = dist.get_rank()
-    world_size = 1 # dist.get_world_size()
+
     device = 'cuda'
-    print("world size : %s" % world_size)
     os.makedirs(os.path.join(args.save), exist_ok=True)
     logging.basicConfig(filename=os.path.join(args.save, "log.log"))
 
@@ -74,26 +64,9 @@ def worker(args):
 
     model_D, model_C = model_D.to(device), model_C.to(device)
 
-    # Sync parameters
-    # if world_size > 1:
-    #     dist.bcast_list_(model_D.parameters(), rank)
-    #     dist.bcast_list_(model_C.parameters(), rank)
-
-    # # Autodiff gradient manager
-    # gm_D = autodiff.GradManager().attach(
-    #     model_D.parameters(),
-    #     callbacks=dist.make_allreduce_cb("SUM") if world_size > 1 else None)
-    # gm_C = autodiff.GradManager().attach(
-    #     model_C.parameters(),
-    #     callbacks=dist.make_allreduce_cb("SUM") if world_size > 1 else None)
-
     # define Optimizer
-    opt_D = optim.Adam(model_D.parameters(), lr=args.lr, weight_decay=args.weight_decay * world_size,
-                       # scale weight decay in "SUM" mode
-                       )
-    opt_C = optim.Adam(model_C.parameters(), lr=args.lr, weight_decay=args.weight_decay * world_size,
-                       # scale weight decay in "SUM" mode
-                       )
+    opt_D = optim.Adam(model_D.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    opt_C = optim.Adam(model_C.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # train and valid
     def train_step_D(image, label):
@@ -110,6 +83,13 @@ def worker(args):
         out12 = (torch.clip(out12_S1, 0, 1) + torch.clip(out12_S2, 0, 1) + torch.clip(out12_S3, 0, 1) + torch.clip(out12_S4, 0, 1)) / 4.0
         out21 = (torch.clip(out21_S1, 0, 1) + torch.clip(out21_S2, 0, 1) + torch.clip(out21_S3, 0, 1) + torch.clip(out21_S4, 0, 1)) / 4.0
         out22 = (torch.clip(out22_S1, 0, 1) + torch.clip(out22_S2, 0, 1) + torch.clip(out22_S3, 0, 1) + torch.clip(out22_S4, 0, 1)) / 4.0
+
+        image_l = F.interpolate(image, scale_factor=args.scale, mode='bicubic', align_corners=False)
+
+        out11 = out11 + image_l
+        out12 = out12 + image_l
+        out21 = out21 + image_l
+        out22 = out22 + image_l
 
         loss11 = F.mse_loss(out11, label)
         loss12 = F.mse_loss(out12, label)
@@ -142,6 +122,11 @@ def worker(args):
         out21 = (torch.clip(out21_S1, 0, 1) + torch.clip(out21_S2, 0, 1) + torch.clip(out21_S3, 0, 1) + torch.clip(out21_S4, 0, 1)) / 4.0
         out22 = (torch.clip(out22_S1, 0, 1) + torch.clip(out22_S2, 0, 1) + torch.clip(out22_S3, 0, 1) + torch.clip(out22_S4, 0, 1)) / 4.0
 
+        out11 = out11 + image_l
+        out12 = out12 + image_l
+        out21 = out21 + image_l
+        out22 = out22 + image_l
+
         return loss_D, loss_trip, loss_divergence, out11, out12, out21, out22
 
 
@@ -169,16 +154,20 @@ def worker(args):
             out12 = (torch.clip(out12_S1, 0, 1) + torch.clip(out12_S2, 0, 1) + torch.clip(out12_S3, 0, 1) + torch.clip(out12_S4, 0, 1)) / 4.0
             out21 = (torch.clip(out21_S1, 0, 1) + torch.clip(out21_S2, 0, 1) + torch.clip(out21_S3, 0, 1) + torch.clip(out21_S4, 0, 1)) / 4.0
             out22 = (torch.clip(out22_S1, 0, 1) + torch.clip(out22_S2, 0, 1) + torch.clip(out22_S3, 0, 1) + torch.clip(out22_S4, 0, 1)) / 4.0
+
+            image_l = F.interpolate(image, scale_factor=args.scale, mode='bicubic', align_corners=False)
+
+            out11 = out11 + image_l
+            out12 = out12 + image_l
+            out21 = out21 + image_l
+            out22 = out22 + image_l
+
             sr = model_C(out11, out12, out21, out22)
         
         sr = sr.cpu(); label = label.cpu()
         _, ssim_it = eval_metrics(sr, label)
         psnr_it = cal_psnr(sr, label, args.scale)
-        # psnr_it = cal_psnr(sr, label, args.scale)
-        # ssim_it = ssim(sr, label)
-        # if world_size > 1:
-        #     psnr_it = F.distributed.all_reduce_sum(psnr_it) / world_size
-        #     ssim_it = F.distributed.all_reduce_sum(ssim_it) / world_size
+
         return psnr_it, ssim_it
 
     # multi-step learning rate scheduler with warmup
@@ -219,6 +208,7 @@ def worker(args):
 
         loss_D, loss_trip, loss_divergence, out11, out12, out21, out22 = train_step_D(image, label)
         loss_C = train_step_C(out11, out12, out21, out22, label)
+
         t_train = time.time() - t_step
         if step % args.print_freq == 0:
             logger.info(
@@ -242,13 +232,16 @@ def worker(args):
                     lr_D, t_train
                     ))
 
+            writer.add_scalar('loss_D', loss_D.item(), step)
+            writer.add_scalar('loss_Trip', loss_trip, step)
+            writer.add_scalar('loss_C', loss_C.item(), step)
+
         if ((step + 1) % (steps_per_epoch * args.val_freq) == 0):
             model_D.eval()
             model_C.eval()
             
             psnr_v, ssim_v = valid(valid_step, valid_dataloader, len_val)
-            # psnr_v = psnr_v.item()
-            # breakpoint()
+
             model_D.train()
             model_C.train()
 
@@ -262,9 +255,9 @@ def worker(args):
                     args.ex_name, psnr_v, ssim_v))
             print("[{}]  PSNR [\033[1;31m{:.2f}\033[0m]  SSIM [\033[1;31m{:.4f}\033[0m]".format(
                     args.ex_name, psnr_v, ssim_v))
+            writer.add_scalar('PSNR', psnr_v, step)
 
             model_D, model_C = model_D.to(device), model_C.to(device)
-
 
 
 def valid(func, data_queue, len_val):
@@ -301,8 +294,6 @@ def create_dataset(args):
     train_dataset = TrainDataset(train_list, args)
     valid_dataset = TestDataset(test_list)
 
-    # train_sampler = data.Infinite(
-    #     data.RandomSampler(train_dataset, batch_size=args.batch_size // args.ngpus, drop_last=True))
     train_sampler = data.RandomSampler(train_dataset)
     train_dataloader = data.DataLoader(train_dataset, sampler=train_sampler, num_workers=args.workers, batch_size=args.batch_size // args.ngpus, drop_last=True)
 

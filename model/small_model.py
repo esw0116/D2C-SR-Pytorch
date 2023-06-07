@@ -24,6 +24,7 @@ import torch.nn as nn
 import model.model_utils as model_utils
 from torch.nn import functional as F
 
+
 class D_Net(nn.Module):
     def __init__(self, args):
         super(D_Net, self).__init__()
@@ -32,9 +33,7 @@ class D_Net(nn.Module):
         else:
             scale = args.scale
         self.scale = scale
-        # self.sub_mean = model_utils.MeanShift(rgb_range)
-        # self.add_mean = model_utils.MeanShift(rgb_range, sign=1)
-        
+
         self.cand1 = nn.Sequential(
             model_utils.BasicConv(1, 64, 2, stride=1, padding=0, relu=True),
             model_utils.BasicConv(64, 64, 1, stride=1, padding=0, relu=True),
@@ -90,11 +89,11 @@ class C_Net(nn.Module):
     def __init__(self, details=False):
         super(C_Net, self).__init__()
         self.fusion_first = nn.Sequential(
-            model_utils.BasicConv(3, 64, 1, stride=1, padding=0, relu=True),
+            model_utils.BasicConv(4, 64, 1, stride=1, padding=0, relu=True),
             model_utils.BasicConv(64, 64, 1, stride=1, padding=0, relu=True),
             model_utils.BasicConv(64, 1, 1, stride=1, padding=0, relu=True))
         self.fusion_final = nn.Sequential(
-            model_utils.BasicConv(4, 64, 1, stride=1, padding=0, relu=True),
+            model_utils.BasicConv(3, 64, 1, stride=1, padding=0, relu=True),
             model_utils.BasicConv(64, 64, 1, stride=1, padding=0, relu=True),
             model_utils.BasicConv(64, 4, 1, stride=1, padding=0, relu=True))
         self.details = details
@@ -104,9 +103,11 @@ class C_Net(nn.Module):
         self.convert = gray_coeffs_t.reshape(1, 3, 1, 1) / 256
 
     def forward(self, x1,x2,x3,x4):
-        x1_y, x2_y, x3_y, x4_y = self.fusion_first(x1), self.fusion_first(x2), self.fusion_first(x3), self.fusion_first(x4)
-        # x1_y, x2_y, x3_y, x4_y = x1_y.sum(dim=1), x2_y.sum(dim=1), x3_y.sum(dim=1), x4_y.sum(dim=1)
-        cat_out = torch.cat((x1_y,x2_y,x3_y,x4_y), dim=1)
+        x_r = torch.stack((x1[:, 0], x2[:, 0], x3[:, 0], x4[:, 0]), dim=1)
+        x_g = torch.stack((x1[:, 1], x2[:, 1], x3[:, 1], x4[:, 1]), dim=1)
+        x_b = torch.stack((x1[:, 2], x2[:, 2], x3[:, 2], x4[:, 2]), dim=1)
+        x_r, x_g, x_b = self.fusion_first(x_r), self.fusion_first(x_g), self.fusion_first(x_b)
+        cat_out = torch.cat((x_r,x_g,x_b), dim=1)
         mask = self.fusion_final(cat_out)
         mask = F.softmax(mask, dim=1)
         mask1 = mask[:,0:1,...]
@@ -117,63 +118,6 @@ class C_Net(nn.Module):
         if self.details:
             return fusion, mask
         return fusion
-
-
-class ResidualGroup(nn.Module):
-    def __init__(self, conv, n_feat, kernel_size, reduction, act, res_scale, n_resblocks):
-        super(ResidualGroup, self).__init__()
-        modules_body = [
-            RCAB(
-                conv, n_feat, kernel_size, reduction, bias=True, bn=False, act=nn.ReLU(), res_scale=1) \
-            for _ in range(n_resblocks)]
-        modules_body.append(conv(n_feat, n_feat, kernel_size))
-        self.body = nn.Sequential(*modules_body)
-
-    def forward(self, x):
-        res = self.body(x)
-        res += x
-        return res
-
-
-class RCAB(nn.Module):
-    def __init__(
-            self, conv, n_feat, kernel_size, reduction,
-            bias=True, bn=False, act=nn.ReLU(), res_scale=1):
-
-        super(RCAB, self).__init__()
-        modules_body = []
-        for i in range(2):
-            modules_body.append(conv(n_feat, n_feat, kernel_size, bias=bias))
-            if bn: modules_body.append(nn.BatchNorm2d(n_feat))
-            if i == 0: modules_body.append(act)
-        modules_body.append(CALayer(n_feat, reduction))
-        self.body = nn.Sequential(*modules_body)
-        self.res_scale = res_scale
-
-    def forward(self, x):
-        res = self.body(x)
-        # res = self.body(x).mul(self.res_scale)
-        res += x
-        return res
-
-
-class CALayer(nn.Module):
-    def __init__(self, channel, reduction=16):
-        super(CALayer, self).__init__()
-        # global average pooling: feature --> point
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        # feature channel downscale and upscale --> channel weight
-        self.conv_du = nn.Sequential(
-            nn.Conv2d(channel, channel // reduction, 1, padding=0, bias=True),
-            nn.ReLU(),
-            nn.Conv2d(channel // reduction, channel, 1, padding=0, bias=True),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        y = self.avg_pool(x)
-        y = self.conv_du(y)
-        return x * y
 
 
 if __name__ == '__main__':
